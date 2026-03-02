@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Planner & Tracker</title>
+    <!-- Use UMD version for better browser compatibility -->
+    <script src="https://cdn.jsdelivr.net"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 700px; }
+        .planner-box { background: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffe082; }
+        .input-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+        input, select { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; min-width: 120px; }
+        button { padding: 10px 15px; background: #1a73e8; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .chart-container { position: relative; height: 350px; margin-bottom: 20px; width: 100%; }
+        .history { max-height: 150px; overflow-y: auto; font-size: 0.85em; border-top: 1px solid #eee; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 style="text-align: center; color: #1a73e8; margin-top: 0;">Workout Planner</h2>
+    
+    <div class="planner-box">
+        <strong style="display:block; margin-bottom:10px;">📅 Plan Future Goals</strong>
+        <div class="input-row">
+            <input type="date" id="goalDate">
+            <input type="number" id="goalAmount" placeholder="Target Reps">
+            <button onclick="savePlannedGoal()" style="background: #ffa000;">Set Goal</button>
+        </div>
+    </div>
+
+    <div class="input-row">
+        <select id="exercise">
+            <option value="Push-ups">Push-ups</option>
+            <option value="Sit-ups">Sit-ups</option>
+        </select>
+        <input type="number" id="reps" placeholder="Reps Done">
+        <button onclick="addEntry()">Log Workout</button>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="workoutChart"></canvas>
+    </div>
+
+    <div id="historyLog" class="history"></div>
+    <button onclick="clearLogs()" style="background: #ff4d4d; width: 100%; margin-top: 15px; border:none; border-radius:6px; color:white; padding:8px; cursor:pointer;">Reset Everything</button>
+</div>
+
+<script>
+    let myChart;
+
+    // Fix for local date strings to prevent "off by one" errors
+    function getLocalDateString(date = new Date()) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('workoutChart');
+        if (!ctx) return;
+        
+        myChart = new Chart(ctx, {
+            type: 'bar', // Base type must be bar for mixed charts
+            data: {
+                labels: [],
+                datasets: [
+                    { type: 'bar', label: 'Push-ups', data: [], backgroundColor: '#1a73e8', stack: 'day' },
+                    { type: 'bar', label: 'Sit-ups', data: [], backgroundColor: '#34a853', stack: 'day' },
+                    { type: 'line', label: 'Goal Line', data: [], borderColor: '#e53935', borderDash: [5, 5], fill: false, pointRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true },
+                    y: { beginAtZero: true, stacked: true }
+                }
+            }
+        });
+    }
+
+    function savePlannedGoal() {
+        const dateStr = document.getElementById('goalDate').value;
+        const amount = parseInt(document.getElementById('goalAmount').value);
+        if (!dateStr || isNaN(amount)) return;
+
+        let goals = JSON.parse(localStorage.getItem('plannedGoals')) || {};
+        goals[dateStr] = amount;
+        localStorage.setItem('plannedGoals', JSON.stringify(goals));
+        updateUI();
+    }
+
+    function addEntry() {
+        const reps = parseInt(document.getElementById('reps').value);
+        if (isNaN(reps)) return;
+        
+        let history = JSON.parse(localStorage.getItem('workoutHistory')) || [];
+        history.push({ 
+            exercise: document.getElementById('exercise').value, 
+            reps: reps, 
+            date: getLocalDateString() 
+        });
+        localStorage.setItem('workoutHistory', JSON.stringify(history));
+        document.getElementById('reps').value = '';
+        updateUI();
+    }
+
+    function updateUI() {
+        if (!myChart) return;
+        
+        const history = JSON.parse(localStorage.getItem('workoutHistory')) || [];
+        const goals = JSON.parse(localStorage.getItem('plannedGoals')) || {};
+        const dailyStats = {};
+        
+        // Combine history and goal dates
+        history.forEach(h => {
+            if (!dailyStats[h.date]) dailyStats[h.date] = { 'Push-ups': 0, 'Sit-ups': 0 };
+            dailyStats[h.date][h.exercise] += h.reps;
+        });
+        Object.keys(goals).forEach(gDate => {
+            if (!dailyStats[gDate]) dailyStats[gDate] = { 'Push-ups': 0, 'Sit-ups': 0 };
+        });
+
+        // Ensure current date is visible
+        const todayStr = getLocalDateString();
+        if (!dailyStats[todayStr]) dailyStats[todayStr] = { 'Push-ups': 0, 'Sit-ups': 0 };
+
+        const sortedDates = Object.keys(dailyStats).sort();
+        const pushups = [], situps = [], goalLine = [];
+
+        sortedDates.forEach(date => {
+            pushups.push(dailyStats[date]['Push-ups']);
+            situps.push(dailyStats[date]['Sit-ups']);
+            goalLine.push(goals[date] || null);
+        });
+
+        myChart.data.labels = sortedDates;
+        myChart.data.datasets[0].data = pushups;
+        myChart.data.datasets[1].data = situps;
+        myChart.data.datasets[2].data = goalLine;
+        myChart.update();
+
+        document.getElementById('historyLog').innerHTML = history.slice().reverse().map(h => 
+            `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
+                <span>${h.date}</span><span>${h.exercise}: ${h.reps}</span>
+            </div>`).join('');
+    }
+
+    window.onload = () => {
+        document.getElementById('goalDate').value = getLocalDateString();
+        initChart();
+        updateUI();
+    };
+
+    function clearLogs() {
+        if(confirm("Delete everything?")) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+</script>
+</body>
+</html>
