@@ -2,168 +2,196 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workout Planner & Tracker</title>
-    <!-- Use UMD version for better browser compatibility -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Workout Tracker Pro</title>
     <script src="https://cdn.jsdelivr.net"></script>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 700px; }
-        .planner-box { background: #fff8e1; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffe082; }
-        .input-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-        input, select { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; min-width: 120px; }
-        button { padding: 10px 15px; background: #1a73e8; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-        .chart-container { position: relative; height: 350px; margin-bottom: 20px; width: 100%; }
-        .history { max-height: 150px; overflow-y: auto; font-size: 0.85em; border-top: 1px solid #eee; margin-top: 10px; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 15px; margin: 0; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; box-sizing: border-box; }
+        .summary { background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-weight: bold; color: #1a73e8; border: 1px solid #b3d7ff; font-size: 16px; }
+        .box { background: #fafafa; border: 1px solid #eee; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+        .row { display: flex; gap: 10px; margin-bottom: 10px; }
+        button { border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; transition: transform 0.1s; }
+        button:active { transform: scale(0.95); }
+        .quick-btn { flex: 1; font-size: 24px; padding: 20px; background: #8e8e93; }
+        .submit-btn { width: 100%; padding: 15px; font-size: 18px; background: #007aff; margin-top: 5px; }
+        .pending-display { font-size: 32px; font-weight: 800; text-align: center; color: #333; margin: 5px 0; }
+        .chart-wrap { height: 260px; margin: 15px 0; }
+        #historyList { max-height: 120px; overflow-y: auto; font-size: 13px; }
+        .log-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px; background: #fff; border-radius: 6px; border: 1px solid #f0f0f0; }
+        .del-btn { background: #ff3b30; padding: 5px 10px; font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align: center; color: #1a73e8; margin-top: 0;">Workout Planner</h2>
-    
-    <div class="planner-box">
-        <strong style="display:block; margin-bottom:10px;">📅 Plan Future Goals</strong>
-        <div class="input-row">
-            <input type="date" id="goalDate">
-            <input type="number" id="goalAmount" placeholder="Target Reps">
-            <button onclick="savePlannedGoal()" style="background: #ffa000;">Set Goal</button>
+    <div id="dailySummary" class="summary">Ready for your next set?</div>
+
+    <!-- STAGING AREA -->
+    <div class="box" style="border: 2px solid #007aff; background: #fff;">
+        <select id="exType" style="width: 100%; padding: 10px; margin-bottom: 10px; font-weight: bold; font-size: 16px; border-radius: 8px; border: 1px solid #ccc;">
+            <option>Push-ups</option>
+            <option>Sit-ups</option>
+        </select>
+        
+        <div class="pending-display" id="pendingVal">0</div>
+        <div style="text-align:center; font-size:11px; color:#888; margin-bottom:10px;">Pending Reps</div>
+
+        <div class="row">
+            <button class="quick-btn" style="background:#ff9500" onclick="stage(1)">+1</button>
+            <button class="quick-btn" style="background:#ff3b30" onclick="stage(10)">+10</button>
+            <button class="quick-btn" style="background:#8e8e93" onclick="stage(0)">CLR</button>
+        </div>
+        
+        <button class="submit-btn" onclick="submitSet()">SUBMIT SET</button>
+    </div>
+
+    <!-- GOAL SETTING -->
+    <div class="box">
+        <div class="row">
+            <input type="date" id="gDate" style="flex:1.5; padding:8px; border-radius:6px; border:1px solid #ccc;">
+            <input type="number" id="gVal" placeholder="Goal" style="flex:1; padding:8px; border-radius:6px; border:1px solid #ccc;">
+            <button onclick="setGoal()" style="background:#34c759; padding:8px 15px;">Set</button>
         </div>
     </div>
 
-    <div class="input-row">
-        <select id="exercise">
-            <option value="Push-ups">Push-ups</option>
-            <option value="Sit-ups">Sit-ups</option>
-        </select>
-        <input type="number" id="reps" placeholder="Reps Done">
-        <button onclick="addEntry()">Log Workout</button>
+    <div class="chart-wrap"><canvas id="workoutChart"></canvas></div>
+    
+    <div id="history">
+        <strong style="display:block; margin-bottom:8px; font-size:14px;">Recent Sets</strong>
+        <div id="historyList"></div>
     </div>
 
-    <div class="chart-container">
-        <canvas id="workoutChart"></canvas>
-    </div>
-
-    <div id="historyLog" class="history"></div>
-    <button onclick="clearLogs()" style="background: #ff4d4d; width: 100%; margin-top: 15px; border:none; border-radius:6px; color:white; padding:8px; cursor:pointer;">Reset Everything</button>
+    <button onclick="resetAll()" style="background:none; border:none; color:#888; font-size:11px; width:100%; margin-top:20px; text-decoration:underline;">Reset All Data</button>
 </div>
 
 <script>
-    let myChart;
+    let chart;
+    let pendingReps = 0;
 
-    // Fix for local date strings to prevent "off by one" errors
-    function getLocalDateString(date = new Date()) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    function initChart() {
-        const ctx = document.getElementById('workoutChart');
-        if (!ctx) return;
-        
-        myChart = new Chart(ctx, {
-            type: 'bar', // Base type must be bar for mixed charts
-            data: {
-                labels: [],
-                datasets: [
-                    { type: 'bar', label: 'Push-ups', data: [], backgroundColor: '#1a73e8', stack: 'day' },
-                    { type: 'bar', label: 'Sit-ups', data: [], backgroundColor: '#34a853', stack: 'day' },
-                    { type: 'line', label: 'Goal Line', data: [], borderColor: '#e53935', borderDash: [5, 5], fill: false, pointRadius: 4 }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: { stacked: true },
-                    y: { beginAtZero: true, stacked: true }
-                }
-            }
-        });
-    }
-
-    function savePlannedGoal() {
-        const dateStr = document.getElementById('goalDate').value;
-        const amount = parseInt(document.getElementById('goalAmount').value);
-        if (!dateStr || isNaN(amount)) return;
-
-        let goals = JSON.parse(localStorage.getItem('plannedGoals')) || {};
-        goals[dateStr] = amount;
-        localStorage.setItem('plannedGoals', JSON.stringify(goals));
-        updateUI();
-    }
-
-    function addEntry() {
-        const reps = parseInt(document.getElementById('reps').value);
-        if (isNaN(reps)) return;
-        
-        let history = JSON.parse(localStorage.getItem('workoutHistory')) || [];
-        history.push({ 
-            exercise: document.getElementById('exercise').value, 
-            reps: reps, 
-            date: getLocalDateString() 
-        });
-        localStorage.setItem('workoutHistory', JSON.stringify(history));
-        document.getElementById('reps').value = '';
-        updateUI();
-    }
-
-    function updateUI() {
-        if (!myChart) return;
-        
-        const history = JSON.parse(localStorage.getItem('workoutHistory')) || [];
-        const goals = JSON.parse(localStorage.getItem('plannedGoals')) || {};
-        const dailyStats = {};
-        
-        // Combine history and goal dates
-        history.forEach(h => {
-            if (!dailyStats[h.date]) dailyStats[h.date] = { 'Push-ups': 0, 'Sit-ups': 0 };
-            dailyStats[h.date][h.exercise] += h.reps;
-        });
-        Object.keys(goals).forEach(gDate => {
-            if (!dailyStats[gDate]) dailyStats[gDate] = { 'Push-ups': 0, 'Sit-ups': 0 };
-        });
-
-        // Ensure current date is visible
-        const todayStr = getLocalDateString();
-        if (!dailyStats[todayStr]) dailyStats[todayStr] = { 'Push-ups': 0, 'Sit-ups': 0 };
-
-        const sortedDates = Object.keys(dailyStats).sort();
-        const pushups = [], situps = [], goalLine = [];
-
-        sortedDates.forEach(date => {
-            pushups.push(dailyStats[date]['Push-ups']);
-            situps.push(dailyStats[date]['Sit-ups']);
-            goalLine.push(goals[date] || null);
-        });
-
-        myChart.data.labels = sortedDates;
-        myChart.data.datasets[0].data = pushups;
-        myChart.data.datasets[1].data = situps;
-        myChart.data.datasets[2].data = goalLine;
-        myChart.update();
-
-        document.getElementById('historyLog').innerHTML = history.slice().reverse().map(h => 
-            `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #eee;">
-                <span>${h.date}</span><span>${h.exercise}: ${h.reps}</span>
-            </div>`).join('');
-    }
-
-    window.onload = () => {
-        document.getElementById('goalDate').value = getLocalDateString();
-        initChart();
-        updateUI();
+    // Helper to keep dates consistent (YYYY-MM-DD)
+    const getLocalISO = (d = new Date()) => {
+        const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
     };
 
-    function clearLogs() {
-        if(confirm("Delete everything?")) {
-            localStorage.clear();
-            location.reload();
-        }
+    window.onload = () => {
+        document.getElementById('gDate').value = getLocalISO();
+        const ctx = document.getElementById('workoutChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: [], datasets: [
+                { type: 'bar', label: 'Push-ups', data: [], backgroundColor: '#007aff', stack: 'stack' },
+                { type: 'bar', label: 'Sit-ups', data: [], backgroundColor: '#34c759', stack: 'stack' },
+                { type: 'line', label: 'Goal', data: [], borderColor: '#ff3b30', pointRadius: 3, fill: false, borderWidth: 2 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { beginAtZero: true, stacked: true } } }
+        });
+        refresh();
+    };
+
+    function stage(amt) {
+        if (amt === 0) pendingReps = 0;
+        else pendingReps += amt;
+        document.getElementById('pendingVal').innerText = pendingReps;
     }
+
+    function submitSet() {
+        if (pendingReps <= 0) return;
+        const type = document.getElementById('exType').value;
+        const logs = JSON.parse(localStorage.getItem('logs') || '[]');
+        logs.push({ id: Date.now(), date: getLocalISO(), type, val: pendingReps });
+        localStorage.setItem('logs', JSON.stringify(logs));
+        
+        pendingReps = 0;
+        document.getElementById('pendingVal').innerText = 0;
+        refresh();
+    }
+
+    function setGoal() {
+        const d = document.getElementById('gDate').value, v = parseInt(document.getElementById('gVal').value);
+        if (!d || isNaN(v)) return;
+        const goals = JSON.parse(localStorage.getItem('goals') || '{}');
+        goals[d] = v;
+        localStorage.setItem('goals', JSON.stringify(goals));
+        refresh();
+    }
+
+    function deleteLog(id) {
+        let logs = JSON.parse(localStorage.getItem('logs') || '[]');
+        logs = logs.filter(l => l.id !== id);
+        localStorage.setItem('logs', JSON.stringify(logs));
+        refresh();
+    }
+
+    function refresh() {
+        if (!chart) return;
+
+        const logs = JSON.parse(localStorage.getItem('logs') || '[]');
+        const goals = JSON.parse(localStorage.getItem('goals') || '{}');
+        const today = getLocalISO();
+        const dataMap = {};
+
+        // 1. Process logs into dataMap
+        logs.forEach(l => {
+            if (!dataMap[l.date]) dataMap[l.date] = {p:0, s:0};
+            l.type === 'Push-ups' ? dataMap[l.date].p += l.val : dataMap[l.date].s += l.val;
+        });
+
+        // 2. Ensure all goal dates and Today are in the map
+        Object.keys(goals).forEach(d => { if (!dataMap[d]) dataMap[d] = {p:0, s:0}; });
+        if (!dataMap[today]) dataMap[today] = {p:0, s:0};
+
+        // 3. Sort dates and prepare Chart.js arrays
+        const sortedDates = Object.keys(dataMap).sort();
+        const pData = [], sData = [], gData = [], pColors = [], sColors = [];
+
+        sortedDates.forEach(d => {
+            const total = dataMap[d].p + dataMap[d].s;
+            const goal = goals[d] || 0;
+            const met = goal > 0 && total >= goal;
+
+            pData.push(dataMap[d].p);
+            sData.push(dataMap[d].s);
+            gData.push(goal || null);
+            
+            // Gold color if goal met, otherwise standard colors
+            pColors.push(met ? '#ffcc00' : '#007aff'); 
+            sColors.push(met ? '#d4af37' : '#34c759');
+        });
+
+        // 4. Assign data to chart and update
+        chart.data.labels = sortedDates;
+        chart.data.datasets[0].data = pData;
+        chart.data.datasets[0].backgroundColor = pColors;
+        chart.data.datasets[1].data = sData;
+        chart.data.datasets[1].backgroundColor = sColors;
+        chart.data.datasets[2].data = gData;
+        chart.update();
+
+        // 5. Update Daily Summary text
+        const tTotal = dataMap[today].p + dataMap[today].s;
+        const tGoal = goals[today] || 0;
+        const summary = document.getElementById('dailySummary');
+        if (tGoal > 0) {
+            summary.innerHTML = tTotal >= tGoal ? `🌟 Goal Met! (${tTotal} reps)` : `🔥 ${tGoal - tTotal} reps left today!`;
+            summary.style.background = tTotal >= tGoal ? "#fff9c4" : "#e7f3ff";
+        } else {
+            summary.innerHTML = `💪 ${tTotal} reps done today. Set a goal!`;
+        }
+
+        // 6. Update History List
+        document.getElementById('historyList').innerHTML = logs.slice().reverse().slice(0,10).map(l => 
+            `<div class="log-item">
+                <span><strong>+${l.val}</strong> ${l.type}</span>
+                <button class="del-btn" onclick="deleteLog(${l.id})">Del</button>
+            </div>`
+        ).join('');
+    }
+
+    function resetAll() { if(confirm("Permanently clear everything?")) { localStorage.clear(); location.reload(); } }
 </script>
+
 </body>
 </html>
